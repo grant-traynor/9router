@@ -50,16 +50,18 @@ const COOLDOWN = {
 /**
  * Unified error classification rules.
  * Checked top-to-bottom: text rules first (by order), then status rules.
- * Each rule: { text?, status?, cooldownMs?, backoff? }
+ * Each rule: { text?, status?, cooldownMs?, backoff?, shouldFallback? }
  *   - text: substring match (case-insensitive) on error message
  *   - status: HTTP status code match
  *   - cooldownMs: fixed cooldown duration
  *   - backoff: true = use exponential backoff (rate limit)
+ *   - shouldFallback: false = return the error without locking the account/model
  */
 export const ERROR_RULES = [
   // --- Text-based rules (checked first, order = priority) ---
   { text: "no credentials",           cooldownMs: COOLDOWN.long },
   { text: "request not allowed",      cooldownMs: COOLDOWN.short },
+  // Kiro uses this HTTP 400 text for subscription-tier/model unavailability.
   { text: "improperly formed request", cooldownMs: COOLDOWN.long },
   { text: "rate limit",               backoff: true },
   { text: "too many requests",        backoff: true },
@@ -68,6 +70,12 @@ export const ERROR_RULES = [
   { text: "overloaded",               backoff: true },
 
   // --- Status-based rules (fallback when text doesn't match) ---
+  // Payload/model validation failures are properties of the request, not the
+  // selected account. Trying another account repeats the same invalid call.
+  { status: 400, shouldFallback: false },
+  { status: 413, shouldFallback: false },
+  { status: 415, shouldFallback: false },
+  { status: 422, shouldFallback: false },
   { status: 401, cooldownMs: COOLDOWN.long },
   { status: 402, cooldownMs: COOLDOWN.long },
   { status: 403, cooldownMs: COOLDOWN.long },
