@@ -14,6 +14,14 @@ describe("detectRequiredCapabilities", () => {
     expect(r.has("vision")).toBe(true);
   });
 
+  it("openai PDF image_url -> pdf, not vision", () => {
+    const r = detectRequiredCapabilities({ messages: [{ role: "user", content: [
+      { type: "image_url", image_url: { url: "data:application/pdf;base64,x" } },
+    ] }] });
+    expect(r.has("pdf")).toBe(true);
+    expect(r.has("vision")).toBe(false);
+  });
+
   it("openai file -> pdf", () => {
     const r = detectRequiredCapabilities({ messages: [{ role: "user", content: [
       { type: "file", file: { file_data: "data:application/pdf;base64,x" } },

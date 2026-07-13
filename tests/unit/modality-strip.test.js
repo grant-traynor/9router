@@ -43,6 +43,16 @@ describe("stripUnsupportedModalities", () => {
     expect(body.messages[0].content.some((b) => b.type === "file")).toBe(false);
   });
 
+  it("openai: classifies a PDF image_url as pdf rather than vision", () => {
+    const body = { messages: [{ role: "user", content: [{
+      type: "image_url",
+      image_url: { url: "data:application/pdf;base64,x" },
+    }] }] };
+    stripUnsupportedModalities(body, FORMATS.OPENAI, NO_PDF);
+    expect(body.messages[0].content.some((b) => b.type === "image_url")).toBe(false);
+    expect(body.messages[0].content.some((b) => /file omitted/.test(b.text || ""))).toBe(true);
+  });
+
   it("openai: keeps image when vision:true", () => {
     const body = { messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "x" } }] }] };
     stripUnsupportedModalities(body, FORMATS.OPENAI, NO_AUDIO);

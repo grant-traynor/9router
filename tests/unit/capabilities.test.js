@@ -8,6 +8,7 @@ describe("getCapabilitiesForModel", () => {
     thinkingFormat: "claude-adaptive",
     reasoning: true,
     vision: true,
+    pdf: true,
     search: true,
   };
 
@@ -25,5 +26,11 @@ describe("getCapabilitiesForModel", () => {
     expect(getCapabilitiesForModel("kiro", "claude-sonnet-5-thinking")).toMatchObject(claudeSonnet5Expected);
     expect(getCapabilitiesForModel("kiro", "claude-sonnet-5-agentic")).toMatchObject(claudeSonnet5Expected);
     expect(getCapabilitiesForModel("kiro", "claude-sonnet-5-thinking-agentic")).toMatchObject(claudeSonnet5Expected);
+  });
+
+  it("reports Anthropic Claude models as PDF-capable", () => {
+    expect(getCapabilitiesForModel("claude", "claude-sonnet-4-6").pdf).toBe(true);
+    expect(getCapabilitiesForModel("claude", "claude-opus-4-8").pdf).toBe(true);
+    expect(getCapabilitiesForModel("claude", "claude-haiku-4-5-20251001").pdf).toBe(true);
   });
 });

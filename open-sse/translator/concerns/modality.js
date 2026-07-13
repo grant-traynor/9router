@@ -30,7 +30,15 @@ function capForMime(mime) {
 // OpenAI chat content block -> required capability (null = plain text/other, keep).
 function capForOpenAIBlock(block) {
   const t = block?.type;
-  if (t === "image_url" || t === "image") return "vision";
+  if (t === "image_url") {
+    const url = typeof block.image_url === "string" ? block.image_url : block.image_url?.url;
+    if (typeof url === "string" && /^data:application\/pdf(?:;|,)/i.test(url)) return "pdf";
+    return "vision";
+  }
+  if (t === "image") {
+    if (block.source?.media_type === "application/pdf") return "pdf";
+    return "vision";
+  }
   if (t === "input_audio" || t === "audio_url") return "audioInput";
   if (t === "file") return "pdf";
   return null;

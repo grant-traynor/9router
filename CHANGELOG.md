@@ -1,3 +1,8 @@
+# Unreleased
+
+## Fixes
+- **Claude documents**: preserve native PDF document blocks and translate OpenAI `file`, Responses `input_file`, compatibility `document`, and PDF `image_url` content into Anthropic document blocks without changing Gemini PDF handling
+
 # v0.5.30 (2026-07-10)
 
 ## Features

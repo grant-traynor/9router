@@ -12,6 +12,19 @@ import { getCapabilitiesForModel } from "../../providers/capabilities.js";
 // Previously "proxy_" was used but this is a detectable fingerprint difference.
 const CLAUDE_OAUTH_TOOL_PREFIX = "";
 
+function isPdfUrl(url) {
+  if (typeof url !== "string" || !/^https?:\/\//.test(url)) return false;
+  try {
+    return new URL(url).pathname.toLowerCase().endsWith(".pdf");
+  } catch {
+    return false;
+  }
+}
+
+function isPdfFile(file, url) {
+  return file?.filename?.toLowerCase().endsWith(".pdf") || isPdfUrl(url);
+}
+
 // Convert OpenAI request to Claude format
 export function openaiToClaudeRequest(model, body, stream) {
   // Tool name mapping for Claude OAuth (capitalizedName → originalName)
@@ -101,7 +114,7 @@ export function openaiToClaudeRequest(model, body, stream) {
       const message = result.messages[i];
       if (message.role === ROLE.ASSISTANT && Array.isArray(message.content) && message.content.length > 0) {
         // Find the last block that can have cache_control (not thinking blocks)
-        const validBlockTypes = [CLAUDE_BLOCK.TEXT, CLAUDE_BLOCK.TOOL_USE, CLAUDE_BLOCK.TOOL_RESULT, CLAUDE_BLOCK.IMAGE];
+        const validBlockTypes = [CLAUDE_BLOCK.TEXT, CLAUDE_BLOCK.TOOL_USE, CLAUDE_BLOCK.TOOL_RESULT, CLAUDE_BLOCK.IMAGE, CLAUDE_BLOCK.DOCUMENT];
         for (let j = message.content.length - 1; j >= 0; j--) {
           const block = message.content[j];
           if (validBlockTypes.includes(block.type)) {
@@ -228,8 +241,13 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
           const parsed = parseDataUri(url);
           if (parsed) {
             blocks.push({
-              type: CLAUDE_BLOCK.IMAGE,
+              type: parsed.mimeType === "application/pdf" ? CLAUDE_BLOCK.DOCUMENT : CLAUDE_BLOCK.IMAGE,
               source: { type: "base64", media_type: parsed.mimeType, data: parsed.base64 }
+            });
+          } else if (isPdfUrl(url)) {
+            blocks.push({
+              type: CLAUDE_BLOCK.DOCUMENT,
+              source: { type: "url", url }
             });
           } else if (url.startsWith("http://") || url.startsWith("https://")) {
             blocks.push({
@@ -238,7 +256,12 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
             });
           }
         } else if (part.type === OPENAI_BLOCK.IMAGE && part.source) {
-          blocks.push({ type: CLAUDE_BLOCK.IMAGE, source: part.source });
+          const type = part.source.media_type === "application/pdf" ? CLAUDE_BLOCK.DOCUMENT : CLAUDE_BLOCK.IMAGE;
+          blocks.push({ type, source: part.source });
+        } else if (part.type === CLAUDE_BLOCK.DOCUMENT && part.source) {
+          // Compatibility: some OpenAI-compatible clients already send the
+          // Anthropic document shape. Preserve optional title/context/citations.
+          blocks.push({ ...part, type: CLAUDE_BLOCK.DOCUMENT });
         } else if (part.type === OPENAI_BLOCK.FILE && part.file) {
           // OpenAI file block -> Claude document (PDF only; Claude rejects other mimes).
           const fileData = part.file.file_data;
@@ -248,6 +271,14 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
               type: CLAUDE_BLOCK.DOCUMENT,
               source: { type: "base64", media_type: parsed.mimeType, data: parsed.base64 }
             });
+          } else {
+            const fileUrl = part.file.file_url || (typeof fileData === "string" && /^https?:\/\//.test(fileData) ? fileData : null);
+            if (fileUrl && isPdfFile(part.file, fileUrl)) {
+              blocks.push({
+                type: CLAUDE_BLOCK.DOCUMENT,
+                source: { type: "url", url: fileUrl }
+              });
+            }
           }
         }
       }
@@ -380,4 +411,3 @@ export { openaiToClaudeRequestForAntigravity };
 
 // Register
 register(FORMATS.OPENAI, FORMATS.CLAUDE, openaiToClaudeRequest, null);
-

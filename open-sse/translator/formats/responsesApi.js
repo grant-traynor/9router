@@ -1,5 +1,30 @@
 import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index.js";
 
+// Normalize one Responses API content part into the OpenAI Chat content shape
+// used as the translation hub. Keep provider-specific file IDs intact, but only
+// inline data and URLs can be translated across providers.
+export function responsesContentPartToOpenAI(part) {
+  if (part.type === RESPONSES_ITEM.INPUT_TEXT || part.type === RESPONSES_ITEM.OUTPUT_TEXT) {
+    return { type: OPENAI_BLOCK.TEXT, text: part.text };
+  }
+  if (part.type === RESPONSES_ITEM.INPUT_IMAGE) {
+    const url = part.image_url || part.file_id || "";
+    return { type: OPENAI_BLOCK.IMAGE_URL, image_url: { url, detail: part.detail || "auto" } };
+  }
+  if (part.type === RESPONSES_ITEM.INPUT_FILE) {
+    return {
+      type: OPENAI_BLOCK.FILE,
+      file: {
+        ...(part.filename && { filename: part.filename }),
+        ...(part.file_data && { file_data: part.file_data }),
+        ...(part.file_url && { file_url: part.file_url }),
+        ...(part.file_id && { file_id: part.file_id }),
+      },
+    };
+  }
+  return part;
+}
+
 /**
  * Normalize Responses API input to array format.
  * Accepts string or array, returns array of message items.
@@ -66,17 +91,9 @@ export function convertResponsesApiFormat(body) {
         pendingToolResults = [];
       }
 
-      // Convert content: input_text → text, output_text → text, input_image → image_url
+      // Convert Responses content into the OpenAI Chat translation hub.
       const content = Array.isArray(item.content)
-        ? item.content.map(c => {
-          if (c.type === RESPONSES_ITEM.INPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
-          if (c.type === RESPONSES_ITEM.OUTPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
-          if (c.type === RESPONSES_ITEM.INPUT_IMAGE) {
-            const url = c.image_url || c.file_id || "";
-            return { type: OPENAI_BLOCK.IMAGE_URL, image_url: { url, detail: c.detail || "auto" } };
-          }
-          return c;
-        })
+        ? item.content.map(responsesContentPartToOpenAI)
         : item.content;
       result.messages.push({ role: item.role, content });
     }

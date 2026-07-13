@@ -6,7 +6,7 @@
  */
 import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
-import { normalizeResponsesInput } from "../formats/responsesApi.js";
+import { normalizeResponsesInput, responsesContentPartToOpenAI } from "../formats/responsesApi.js";
 import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index.js";
 
 // Responses API enforces max 64 chars on call_id (#393)
@@ -75,17 +75,9 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
         pendingToolResults = [];
       }
 
-      // Convert content: input_text → text, output_text → text, input_image → image_url
+      // Convert Responses content into the OpenAI Chat translation hub.
       const content = Array.isArray(item.content)
-        ? item.content.map(c => {
-          if (c.type === RESPONSES_ITEM.INPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
-          if (c.type === RESPONSES_ITEM.OUTPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
-          if (c.type === RESPONSES_ITEM.INPUT_IMAGE) {
-            const url = c.image_url || c.file_id || "";
-            return { type: OPENAI_BLOCK.IMAGE_URL, image_url: { url, detail: c.detail || "auto" } };
-          }
-          return c;
-        })
+        ? item.content.map(responsesContentPartToOpenAI)
         : item.content;
       const msg = { role: item.role, content };
       // Attach buffered reasoning to assistant turn (required by xiaomi-mimo + store=false continuity)

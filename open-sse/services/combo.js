@@ -109,7 +109,10 @@ export function detectRequiredCapabilities(body) {
   const scanBlock = (b) => {
     if (!b || typeof b !== "object") return;
     const t = b.type;
-    if (t === "image_url" || t === "image" || t === "input_image") required.add("vision");
+    const imageUrl = typeof b.image_url === "string" ? b.image_url : b.image_url?.url;
+    const isPdfImage = t === "image_url" && typeof imageUrl === "string" && /^data:application\/pdf(?:;|,)/i.test(imageUrl);
+    if (isPdfImage || (t === "image" && b.source?.media_type === "application/pdf")) required.add("pdf");
+    else if (t === "image_url" || t === "image" || t === "input_image") required.add("vision");
     if (t === "file" || t === "document" || t === "input_file") required.add("pdf");
     // gemini parts: inlineData/fileData carry a mime
     const mime = b.inlineData?.mimeType || b.fileData?.mimeType;
