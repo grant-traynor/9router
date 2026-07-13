@@ -33,4 +33,9 @@ describe("getCapabilitiesForModel", () => {
     expect(getCapabilitiesForModel("claude", "claude-opus-4-8").pdf).toBe(true);
     expect(getCapabilitiesForModel("claude", "claude-haiku-4-5-20251001").pdf).toBe(true);
   });
+
+  it("reports Gemini chat models as PDF-capable", () => {
+    expect(getCapabilitiesForModel("antigravity", "gemini-3-flash").pdf).toBe(true);
+    expect(getCapabilitiesForModel("gemini-cli", "gemini-2.5-pro").pdf).toBe(true);
+  });
 });

@@ -30,9 +30,11 @@ describe("file/document block support", () => {
   });
 
   it("gemini: PDF image_url remains inlineData", () => {
-    const parts = convertOpenAIContentToParts([
+    const body = { messages: [{ role: "user", content: [
       { type: "image_url", image_url: { url: PDF_DATA } },
-    ]);
+    ] }] };
+    stripUnsupportedModalities(body, FORMATS.OPENAI, getCapabilitiesForModel("antigravity", "gemini-3-flash"));
+    const parts = convertOpenAIContentToParts(body.messages[0].content);
     expect(parts[0].inlineData).toEqual({
       mime_type: "application/pdf",
       data: "JVBERi0xLjE=",
