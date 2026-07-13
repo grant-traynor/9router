@@ -118,6 +118,85 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
   return events;
 }
 
+/**
+ * Convert a completed OpenAI Chat Completions response into a completed
+ * Responses API object. Streaming responses use the event translator above;
+ * this is the equivalent boundary conversion for provider JSON responses.
+ */
+export function openAICompletionToOpenAIResponses(response) {
+  if (response?.object === "response" && Array.isArray(response.output)) return response;
+
+  const choice = response?.choices?.[0] || {};
+  const message = choice.message || {};
+  const responseId = response?.id
+    ? (String(response.id).startsWith("resp_") ? String(response.id) : `resp_${response.id}`)
+    : `resp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const output = [];
+
+  const reasoning = message.reasoning_content || message.provider_specific_fields?.reasoning_content;
+  if (typeof reasoning === "string" && reasoning.length > 0) {
+    output.push({
+      id: `rs_${responseId}_0`,
+      type: RESPONSES_ITEM.REASONING,
+      summary: [{ type: RESPONSES_ITEM.SUMMARY_TEXT, text: reasoning }],
+    });
+  }
+
+  if (typeof message.content === "string" && message.content.length > 0) {
+    output.push({
+      id: `msg_${responseId}_0`,
+      type: RESPONSES_ITEM.MESSAGE,
+      role: ROLE.ASSISTANT,
+      content: [{
+        type: RESPONSES_ITEM.OUTPUT_TEXT,
+        annotations: [],
+        logprobs: [],
+        text: message.content,
+      }],
+    });
+  }
+
+  for (const [index, toolCall] of (message.tool_calls || []).entries()) {
+    const callId = toolCall.id || fallbackToolCallId(index);
+    const args = toolCall.function?.arguments ?? toolCall.arguments ?? "{}";
+    output.push({
+      id: `fc_${callId}`,
+      type: RESPONSES_ITEM.FUNCTION_CALL,
+      call_id: callId,
+      name: toolCall.function?.name || toolCall.name || "",
+      arguments: typeof args === "string" ? args : JSON.stringify(args),
+    });
+  }
+
+  const sourceUsage = response?.usage || {};
+  const inputTokens = sourceUsage.input_tokens ?? sourceUsage.prompt_tokens ?? 0;
+  const outputTokens = sourceUsage.output_tokens ?? sourceUsage.completion_tokens ?? 0;
+  const usage = {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: sourceUsage.total_tokens ?? (inputTokens + outputTokens),
+  };
+  if (sourceUsage.input_tokens_details || sourceUsage.prompt_tokens_details) {
+    usage.input_tokens_details = sourceUsage.input_tokens_details || sourceUsage.prompt_tokens_details;
+  }
+  if (sourceUsage.output_tokens_details || sourceUsage.completion_tokens_details) {
+    usage.output_tokens_details = sourceUsage.output_tokens_details || sourceUsage.completion_tokens_details;
+  }
+
+  return {
+    id: responseId,
+    object: "response",
+    created_at: response?.created || Math.floor(Date.now() / 1000),
+    status: "completed",
+    background: false,
+    error: null,
+    incomplete_details: null,
+    model: response?.model || MODEL_FALLBACK,
+    output,
+    usage,
+  };
+}
+
 // Helper functions
 function startReasoning(state, emit, idx) {
   if (!state.reasoningId) {

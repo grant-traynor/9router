@@ -9,6 +9,7 @@ import { parseSSEToOpenAIResponse } from "./sseToJsonHandler.js";
 import { buildRequestDetail, extractRequestConfig, extractUsageFromResponse, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { decloakToolNames } from "../../utils/claudeCloaking.js";
+import { openAICompletionToOpenAIResponses } from "../../translator/response/openai-responses.js";
 
 function parseToolArguments(value) {
   if (!value) return {};
@@ -65,6 +66,10 @@ function openAICompletionToClaudeMessage(responseBody) {
  */
 export function translateNonStreamingResponse(responseBody, targetFormat, sourceFormat) {
   if (targetFormat === sourceFormat) return responseBody;
+  if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
+    const openAIResponse = translateNonStreamingResponse(responseBody, targetFormat, FORMATS.OPENAI);
+    return openAICompletionToOpenAIResponses(openAIResponse);
+  }
   if (targetFormat === FORMATS.OPENAI && sourceFormat === FORMATS.CLAUDE) {
     return openAICompletionToClaudeMessage(responseBody);
   }
