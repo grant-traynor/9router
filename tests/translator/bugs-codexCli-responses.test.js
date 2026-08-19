@@ -60,6 +60,24 @@ describe("OpenAI → Codex Responses (reverse)", () => {
     ]);
   });
 
+  it("concatenates extra system messages into instructions instead of dropping them", () => {
+    const out = O2R({
+      messages: [
+        { role: "system", content: "You are Hippo." },
+        { role: "system", content: "This thread is the topic.\nhello from yesterday" },
+        { role: "system", content: "Plane workspace `x`." },
+        { role: "user", content: "what is a campaign" },
+      ],
+    });
+    expect(out.instructions).toContain("You are Hippo.");
+    expect(out.instructions).toContain("This thread is the topic.");
+    expect(out.instructions).toContain("hello from yesterday");
+    expect(out.instructions).toContain("Plane workspace `x`.");
+    expect(out.input).toEqual([
+      { type: "message", role: "user", content: [{ type: "input_text", text: "what is a campaign" }] },
+    ]);
+  });
+
   // openai-responses.js:13 — clampCallId NOT applied on Responses→Chat; but here Chat→Responses must clamp
   it("call_id longer than 64 chars is clamped", () => {
     const longId = "call_" + "x".repeat(80);

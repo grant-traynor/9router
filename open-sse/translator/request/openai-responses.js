@@ -197,6 +197,18 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
   return result;
 }
 
+function systemMessageText(msg) {
+  if (typeof msg?.content === "string") return msg.content.trim();
+  if (Array.isArray(msg?.content)) {
+    return msg.content
+      .map((c) => (typeof c?.text === "string" ? c.text : ""))
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  return "";
+}
+
 /**
  * Ensure object schema always has properties field (required by Codex Responses API)
  */
@@ -263,13 +275,18 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
 
   for (const msg of messages) {
     if (msg.role === ROLE.SYSTEM || msg.role === ROLE.DEVELOPER) {
-      // Use the first instruction-bearing message as instructions.
-      // OpenAI recommends role="developer" for GPT-5/Codex as the system-level prompt.
+      // Responses API has a single `instructions` field. Concatenate extra
+      // system messages instead of dropping them (Hippo puts thread/schema
+      // in later system messages; dropping them loses the topic).
+      const text = systemMessageText(msg);
+      if (!text) continue;
       if (!hasSystemMessage) {
-        result.instructions = typeof msg.content === "string" ? msg.content : "";
+        result.instructions = text;
         hasSystemMessage = true;
+      } else {
+        result.instructions += "\n\n" + text;
       }
-      continue; // Skip instruction messages in input
+      continue;
     }
 
     // Convert user/assistant messages to input items

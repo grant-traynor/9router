@@ -34,6 +34,27 @@ function pickAssistantMessageForChatCompletion(output) {
   return { msgItem: last, textContent: textFromResponsesMessageItem(last) };
 }
 
+function reasoningFromOutput(output) {
+  if (!Array.isArray(output)) return { text: "", encrypted: "" };
+  let text = "";
+  let encrypted = "";
+  for (const item of output) {
+    if (item?.type !== "reasoning") continue;
+    if (typeof item.encrypted_content === "string" && item.encrypted_content) {
+      encrypted = item.encrypted_content;
+    }
+    let piece = "";
+    if (Array.isArray(item.summary)) {
+      piece = item.summary.map((s) => s?.text || "").filter(Boolean).join("\n");
+    }
+    if (!piece && Array.isArray(item.content)) {
+      piece = item.content.map((c) => c?.text || "").filter(Boolean).join("\n");
+    }
+    if (piece) text = text ? `${text}\n${piece}` : piece;
+  }
+  return { text, encrypted };
+}
+
 /**
  * Parse OpenAI-style SSE text into a single chat completion JSON.
  * Used when provider forces streaming but client wants non-streaming.
@@ -149,7 +170,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, pr
       let finalResp;
 
       // Extract tool calls from Responses API output (function_call items)
-      const funcCallItems = (jsonResponse.output || []).filter(item => item.type === "function_call");
+      const funcCallItems = (jsonResponse.output || []).filter(item => item.type === "function_call" && item.name);
       const toolCalls = funcCallItems.map((item, idx) => ({
         id: item.call_id || `call_${item.name}_${Date.now()}_${idx}`,
         type: "function",
@@ -159,18 +180,26 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, pr
         }
       }));
       const hasToolCalls = toolCalls.length > 0;
+      const { text: reasoningText, encrypted } = reasoningFromOutput(jsonResponse.output);
 
       if (sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI || sourceFormat === FORMATS.GEMINI_CLI) {
         finalResp = {
           response: {
-            candidates: [{ content: { role: "model", parts: [{ text: textContent || "" }] }, finishReason: "STOP", index: 0 }],
+            candidates: [{ content: { role: "model", parts: [{ text: textContent || reasoningText || "" }] }, finishReason: "STOP", index: 0 }],
             usageMetadata: { promptTokenCount: inTokens, candidatesTokenCount: outTokens, totalTokenCount: inTokens + outTokens },
             modelVersion: model,
             responseId: jsonResponse.id || `resp_${Date.now()}`
           }
         };
       } else {
-        const message = { role: "assistant", content: textContent || (hasToolCalls ? null : "") };
+        // Chat Completions clients (Hippo) do not render reasoning_content.
+        // When Grok returns a reasoning item and no output_text, that summary
+        // *is* the answer — put it in content so the user sees it. Always
+        // attach encrypted_content so the next store=false turn isn't empty.
+        const visible = textContent || (!hasToolCalls && reasoningText ? reasoningText : "");
+        const message = { role: "assistant", content: visible || (hasToolCalls ? null : "") };
+        if (reasoningText) message.reasoning_content = reasoningText;
+        if (encrypted) message.encrypted_content = encrypted;
         if (hasToolCalls) message.tool_calls = toolCalls;
         const responseDone = jsonResponse.status === "completed" || jsonResponse.status === "done";
         const finishReason = hasToolCalls ? "tool_calls" : (responseDone ? "stop" : (jsonResponse.status || "stop"));
