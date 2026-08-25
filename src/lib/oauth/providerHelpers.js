@@ -50,6 +50,20 @@ function extractEmailFromAccessToken(accessToken) {
   return payload.email || payload.preferred_username || payload.sub || undefined;
 }
 
+export function mapAntigravityTokens(tokens, extra) {
+  return {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiresIn: tokens.expires_in,
+    scope: tokens.scope,
+    email: extra?.userInfo?.email,
+    // loadCodeAssist can temporarily omit cloudaicompanionProject. Do not
+    // overwrite a valid project saved by an earlier OAuth connection with
+    // an empty value when the same account reconnects.
+    ...(extra?.projectId ? { projectId: extra.projectId } : {}),
+  };
+}
+
 export async function fetchKiroProfileArn(accessToken) {
   if (!accessToken) return null;
   try {

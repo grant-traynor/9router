@@ -37,6 +37,7 @@ import {
   extractEmailFromAccessToken,
   extractCodexAccountInfo,
   fetchKiroProfileArn,
+  mapAntigravityTokens,
 } from "./providerHelpers";
 
 export { extractCodexAccountInfo, fetchKiroProfileArn };
@@ -563,14 +564,7 @@ const PROVIDERS = {
 
       return { userInfo, projectId };
     },
-    mapTokens: (tokens, extra) => ({
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresIn: tokens.expires_in,
-      scope: tokens.scope,
-      email: extra?.userInfo?.email,
-      projectId: extra?.projectId,
-    }),
+    mapTokens: mapAntigravityTokens,
   },
 
   iflow: {
